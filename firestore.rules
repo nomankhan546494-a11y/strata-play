@@ -1,0 +1,189 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'gamerTag', 'avatarColor', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'gamerTag', 'avatarColor', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid == userId && data.uid.size() <= 128
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60
+        && data.gamerTag is string && data.gamerTag.size() >= 2 && data.gamerTag.size() <= 32 && data.gamerTag.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.avatarColor is string && data.avatarColor.size() >= 4 && data.avatarColor.size() <= 16
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserSettings(data, userId) {
+      return data.keys().hasAll(['uid', 'quality', 'targetFps', 'region', 'audioEnabled', 'showVirtualControls', 'lowLatencyMode', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'quality', 'targetFps', 'region', 'audioEnabled', 'showVirtualControls', 'lowLatencyMode', 'updatedAt'])
+        && data.uid is string && data.uid == userId && data.uid.size() <= 128
+        && data.quality is string && data.quality in ['720p', '1080p', '1440p', '4K']
+        && data.targetFps is number && data.targetFps in [60, 120]
+        && data.region is string && data.region in ['Tokyo East', 'Singapore', 'Frankfurt', 'US West']
+        && data.audioEnabled is bool
+        && data.showVirtualControls is bool
+        && data.lowLatencyMode is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidGameProgress(data, userId, gameId) {
+      return data.keys().hasAll(['uid', 'gameId', 'highScore', 'totalSeconds', 'sessionsCount', 'savedToLibrary', 'checkpointData', 'lastPlayedAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'gameId', 'highScore', 'totalSeconds', 'sessionsCount', 'savedToLibrary', 'checkpointData', 'lastPlayedAt', 'updatedAt'])
+        && data.uid is string && data.uid == userId && data.uid.size() <= 128
+        && data.gameId is string && data.gameId == gameId && isValidId(data.gameId)
+        && data.highScore is number && data.highScore >= 0
+        && data.totalSeconds is number && data.totalSeconds >= 0
+        && data.sessionsCount is number && data.sessionsCount >= 0
+        && data.savedToLibrary is bool
+        && data.checkpointData is string && data.checkpointData.size() <= 2048
+        && data.lastPlayedAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCustomGameLink(data, userId, customGameId) {
+      return data.keys().hasAll(['uid', 'customGameId', 'customName', 'gameUrl', 'category', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'customGameId', 'customName', 'gameUrl', 'category', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid == userId && data.uid.size() <= 128
+        && data.customGameId is string && data.customGameId == customGameId && isValidId(data.customGameId)
+        && data.customName is string && data.customName.size() >= 1 && data.customName.size() <= 80
+        && data.gameUrl is string && data.gameUrl.size() >= 8 && data.gameUrl.size() <= 500 && data.gameUrl.matches('^https?://.+')
+        && data.category is string && data.category in ['Action', 'Racing', 'Strategy', 'Puzzle', 'Custom']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMultiplayerRoom(data, roomId) {
+      return data.keys().hasAll(['roomId', 'code', 'name', 'hostUid', 'hostName', 'gameId', 'mode', 'region', 'playersCurrent', 'playersMax', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['roomId', 'code', 'name', 'hostUid', 'hostName', 'gameId', 'mode', 'region', 'playersCurrent', 'playersMax', 'status', 'createdAt', 'updatedAt'])
+        && data.roomId is string && data.roomId == roomId && isValidId(data.roomId)
+        && data.code is string && data.code.size() >= 4 && data.code.size() <= 16
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 80
+        && data.hostUid is string && data.hostUid.size() >= 1 && data.hostUid.size() <= 128
+        && data.hostName is string && data.hostName.size() >= 1 && data.hostName.size() <= 40
+        && data.gameId is string && isValidId(data.gameId)
+        && data.mode is string && data.mode in ['Co-op Survival', '1v1 Duel', 'Time Attack']
+        && data.region is string && data.region in ['Tokyo East', 'Singapore', 'Frankfurt', 'US West']
+        && data.playersCurrent is number && data.playersCurrent >= 1 && data.playersCurrent <= 8
+        && data.playersMax is number && data.playersMax >= 2 && data.playersMax <= 8 && data.playersCurrent <= data.playersMax
+        && data.status is string && data.status in ['open', 'closed']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId) && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId) && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'gamerTag', 'avatarColor', 'updatedAt']);
+      allow delete: if false;
+
+      match /settings/{settingId} {
+        allow get: if isValidId(userId) && isValidId(settingId) && isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(settingId) && isOwner(userId)
+          && isValidUserSettings(incoming(), userId)
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(settingId) && isOwner(userId)
+          && isValidUserSettings(incoming(), userId)
+          && incoming().uid == existing().uid
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['quality', 'targetFps', 'region', 'audioEnabled', 'showVirtualControls', 'lowLatencyMode', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      match /progress/{gameId} {
+        allow get: if isValidId(userId) && isValidId(gameId) && isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(gameId) && isOwner(userId)
+          && isValidGameProgress(incoming(), userId, gameId)
+          && incoming().lastPlayedAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(gameId) && isOwner(userId)
+          && isValidGameProgress(incoming(), userId, gameId)
+          && incoming().uid == existing().uid
+          && incoming().gameId == existing().gameId
+          && incoming().updatedAt == request.time
+          && (
+            (incoming().lastPlayedAt == request.time && incoming().diff(existing()).affectedKeys().hasOnly(['highScore', 'totalSeconds', 'sessionsCount', 'savedToLibrary', 'checkpointData', 'lastPlayedAt', 'updatedAt']))
+            || (incoming().lastPlayedAt == existing().lastPlayedAt && incoming().diff(existing()).affectedKeys().hasOnly(['savedToLibrary', 'updatedAt']))
+          );
+        allow delete: if false;
+      }
+
+      match /customGames/{customGameId} {
+        allow get: if isValidId(userId) && isValidId(customGameId) && isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isValidId(userId) && isValidId(customGameId) && isOwner(userId)
+          && isValidCustomGameLink(incoming(), userId, customGameId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(customGameId) && isOwner(userId)
+          && isValidCustomGameLink(incoming(), userId, customGameId)
+          && incoming().uid == existing().uid
+          && incoming().customGameId == existing().customGameId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['customName', 'gameUrl', 'category', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(customGameId) && isOwner(userId);
+      }
+    }
+
+    match /multiplayerRooms/{roomId} {
+      allow get: if isValidId(roomId) && isVerifiedUser();
+      allow list: if isVerifiedUser() && resource.data.status == 'open';
+      allow create: if isValidId(roomId) && isVerifiedUser()
+        && isValidMultiplayerRoom(incoming(), roomId)
+        && incoming().hostUid == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(roomId) && isVerifiedUser()
+        && isValidMultiplayerRoom(incoming(), roomId)
+        && existing().status == 'open'
+        && incoming().roomId == existing().roomId
+        && incoming().hostUid == existing().hostUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (incoming().diff(existing()).affectedKeys().hasOnly(['playersCurrent', 'updatedAt']))
+          || (existing().hostUid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if isValidId(roomId) && isVerifiedUser() && existing().hostUid == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Strata Play",
+  "description": "Instant cloud gaming platform with playable arcade, racing, defense, and tactical puzzle streams.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
